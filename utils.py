@@ -64,7 +64,7 @@ def convert_data_to_fives(data):
         if num4==-1:
             num4=data[i+1][0]
         if num5 == -1:
-            num5 = data[2 + 1][0]
+            num5 = data[2 + i][0]
 
         num3=data[i][0]
         new_data.append((torch.tensor([num1, num2, num3, num4, num5]),data[i][1]))
