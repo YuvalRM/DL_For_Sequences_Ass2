@@ -4,9 +4,10 @@ from torch import nn
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-from utils import LABELS_pos,TRAIN_pos,DEV_pos,vocab_pos
-hyper_parameters = {"lr": 5e-3, 'epochs': 100, 'momentum': 0.9}
+from utils import LABELS_pos,TRAIN_pos,DEV_pos,vocab_pos,LABELS_ner,TRAIN_ner,DEV_ner,vocab_ner
 
+hyper_parameters = {"lr": 1e-2, 'epochs': 100, 'momentum': 0.9}
+pos=True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def create_tensor_with_prob_zero( tensor_size,rand_value):
@@ -70,7 +71,7 @@ def train(model, train_loader, optimizer, epoch, tb_writer):
             tb_writer.add_scalar('Loss/train', last_loss, tb_x)
             running_loss = 0.
     if epoch % 5 == 0:
-        print(f'train accuracy: {accurate / len(train_loader)}')
+        print(f'train accuracy: {100*accurate / len(train_loader.dataset)}')
     return last_loss
 
 
@@ -78,9 +79,14 @@ if __name__ == '__main__':
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
-    model = MLP_Tagger(len(vocab_pos), len(LABELS_pos), embed_size=50).to(device)
-    train_set=torch.utils.data.DataLoader(TRAIN_pos, batch_size=150, shuffle=True)
-    validation_loader = torch.utils.data.DataLoader(DEV_pos, batch_size=100, shuffle=True)
+    if pos:
+        model = MLP_Tagger(len(vocab_pos), len(LABELS_pos), embed_size=50).to(device)
+        train_set=torch.utils.data.DataLoader(TRAIN_pos, batch_size=150, shuffle=True)
+        validation_loader = torch.utils.data.DataLoader(DEV_pos, batch_size=100, shuffle=True)
+    else:
+        model = MLP_Tagger(len(vocab_ner), len(LABELS_ner), embed_size=50).to(device)
+        train_set = torch.utils.data.DataLoader(TRAIN_ner, batch_size=150, shuffle=True)
+        validation_loader = torch.utils.data.DataLoader(DEV_ner, batch_size=100, shuffle=True)
     epochs=hyper_parameters['epochs']
     optimizer = torch.optim.SGD(model.parameters(), lr=hyper_parameters['lr'], momentum=hyper_parameters['momentum'])
     best_loss= 1e6
@@ -105,7 +111,7 @@ if __name__ == '__main__':
                     pred=torch.argmax(voutputs[i])
                     if pred ==torch.argmax(vlabels[i]):
                         accurate+=1
-            print(f'validation accuracy: {accurate/len(validation_loader)}')
+            print(f'validation accuracy: {100*accurate/len(validation_loader.dataset)}')
 
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
@@ -122,4 +128,4 @@ if __name__ == '__main__':
             pred = torch.argmax(outputs[i])
             if pred == torch.argmax(labels[i]):
                 accurate += 1
-    print(f'final train accuracy: {accurate / len(train_set)}')
+    print(f'final train accuracy: {100*accurate / len(train_set.dataset)}')
