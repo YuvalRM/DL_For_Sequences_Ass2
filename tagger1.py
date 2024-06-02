@@ -10,14 +10,14 @@ def load_data(file_name):
     for line in lines:
         line = line.strip()
         x_y = line.split()
-        if len(x_y) == 2 and len(x_y[1]) == 2:
+        if len(x_y) == 2 and len(x_y[1]) >= 2 and x_y[1] not in ['""','``',"''"]:
             data.append((x_y[0], x_y[1]))
     return data
 
 
 TRAIN = [(w, pos) for w, pos in load_data('./pos/train')]
 vocab = {l: i for i, l in enumerate(list(sorted(set([l for l, t in TRAIN]))))}
-
+labels = {t: i for i, t in enumerate(list(sorted(set([t for l, t in TRAIN]))))}
 
 class MLP_Tagger(nn.Module):
     def __init__(self, input_size, output_size, embed_size=50):
@@ -35,4 +35,5 @@ class MLP_Tagger(nn.Module):
 
 if __name__ == '__main__':
     data = load_data('./pos/train')
+    model = MLP_Tagger(len(vocab),len(labels),embed_size=50)
     print('hi')
