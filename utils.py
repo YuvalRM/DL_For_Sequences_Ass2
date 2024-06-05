@@ -12,7 +12,9 @@ def load_labes(file_name):
     for line in lines:
         line = line.strip()
         x_y = line.split()
+
         if len(x_y) == 2 and relevant(x_y[1]) and x_y[1] not in labes.keys():
+            x_y[0] = x_y[0].lower()
             labes[x_y[1]] = i
             i += 1
     f.close()
@@ -29,7 +31,9 @@ def load_data(file_name):
     for line in lines:
         line = line.strip()
         x_y = line.split()
+
         if len(x_y) == 2 and relevant(x_y[1]):
+            x_y[0] = x_y[0].lower()
             data.append((x_y[0], x_y[1]))
     f.close()
     return data
