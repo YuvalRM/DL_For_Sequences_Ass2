@@ -8,7 +8,7 @@ from datetime import datetime
 
 EPOCHS=10
 BATCH_SIZE = 32
-pos = False
+pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 from utils import create_dev_train

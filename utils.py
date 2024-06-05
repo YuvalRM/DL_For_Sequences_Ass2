@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 def relevant(symbol):
+    return True
     return symbol not in ['""', '``', "''", '#', '$', '(', ')', ',', ':', '.', ';']
 
 
