@@ -61,25 +61,16 @@ def convert_data_to_fives(data):
     return new_data
 
 
-LABELS_pos = load_labes('./pos/train')
-Word_to_vec_pos = [(w, LABELS_pos[pos]) for w, pos in load_data('./pos/train')]
-vocab_pos = {l: i + 3 for i, l in enumerate(list(sorted(set([l for l, t in Word_to_vec_pos]))))}
-vocab_pos['<start>'] = 1  #for the edges and words not in the dataset
-vocab_pos['<end>']=2
-vocab_pos['<unknown>']=0
-DEV_pos = [ (vocab_pos[w], LABELS_pos[pos]) if w in vocab_pos.keys() else (vocab_pos['<unknown>'],  LABELS_pos[pos]) for w, pos in load_data('./pos/dev')]
-TRAIN_pos = [(vocab_pos[w],vec) for w,vec in Word_to_vec_pos]
-TRAIN_pos=convert_data_to_fives(TRAIN_pos)
-DEV_pos =convert_data_to_fives(DEV_pos)
-
-
-LABELS_ner = load_labes('./ner/train')
-Word_to_vec_ner = [(w, LABELS_ner[ner]) for w, ner in load_data('./ner/train')]
-vocab_ner = {l: i + 1 for i, l in enumerate(list(sorted(set([l for l, t in Word_to_vec_ner]))))}
-vocab_ner['<start>'] = 1  #for the edges and words not in the dataset
-vocab_ner['<end>']=2
-vocab_ner['<unknown>']=0
-DEV_ner = [ (vocab_ner[w], LABELS_ner[ner]) if w in vocab_ner.keys() else (vocab_ner['<unknown>'],LABELS_ner[ner]) for w, ner in load_data('./ner/dev')]
-TRAIN_ner = [(vocab_ner[w],vec) for w,vec in Word_to_vec_ner]
-TRAIN_ner=convert_data_to_fives(TRAIN_ner)
-DEV_ner =convert_data_to_fives(DEV_ner)
+def create_dev_train(train_file,dev_file):
+    LABELS = load_labes(train_file)
+    Word_to_lable_id = [(w, LABELS[ner]) for w, ner in load_data(train_file)]
+    word_to_id = {l: i + 3 for i, l in enumerate(list(sorted(set([l for l, t in Word_to_lable_id]))))}
+    word_to_id['<start>'] = 1  # for the edges and words not in the dataset
+    word_to_id['<end>'] = 2
+    word_to_id['<unknown>'] = 0
+    DEV = [(word_to_id[w], LABELS[label_id]) if w in word_to_id.keys() else (word_to_id['<unknown>'], LABELS[label_id])
+           for w, label_id in load_data(dev_file)]
+    TRAIN = [(word_to_id[w], label) for w, label in Word_to_lable_id]
+    TRAIN = convert_data_to_fives(TRAIN)
+    DEV = convert_data_to_fives(DEV)
+    return word_to_id,TRAIN,DEV,LABELS
