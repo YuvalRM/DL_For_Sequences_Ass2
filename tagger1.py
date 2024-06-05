@@ -39,7 +39,7 @@ class MLP_Tagger(nn.Module):
 
 
 def train(model, train_loader, optimizer, epoch, tb_writer):
-    rand_value = 0.2  # hyper parameter for vanishing randomly words s.t we will be able to handle words not int the vocab
+    rand_value = 0  # hyper parameter for vanishing randomly words s.t we will be able to handle words not int the vocab
     running_loss = 0.0
     last_loss = 0.0
     for batch_idx, data in enumerate(train_loader):
