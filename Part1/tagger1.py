@@ -70,9 +70,9 @@ def train(model, train_loader, optimizer, epoch, tb_writer):
 if __name__ == '__main__':
 
     if pos:
-        prefix='./pos/'
+        prefix='../pos/'
     else:
-        prefix='./ner/'
+        prefix='../ner/'
 
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
