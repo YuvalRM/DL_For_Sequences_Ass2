@@ -4,14 +4,17 @@ from torch import nn
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
+
 #from utils import LABELS_pos, TRAIN_pos, DEV_pos, vocab_pos, LABELS_ner, TRAIN_ner, DEV_ner, vocab_ner
 
-EPOCHS=10
+EPOCHS = 10
 BATCH_SIZE = 32
 pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 from utils import create_dev_train
+
+
 def create_tensor_with_prob_zero(tensor_size, rand_value):
     ones_tensor = torch.ones(tensor_size)
     zero_mask = torch.rand(tensor_size[0]) < rand_value
@@ -57,11 +60,9 @@ def train(model, train_loader, optimizer, epoch):
         optimizer.step()
         running_loss += loss.item()
 
-
         if batch_idx % 1000 == 999:
             last_loss = running_loss / 1000  # loss per batch
             print('  batch {} loss: {}'.format(batch_idx + 1, last_loss))
-            tb_x = epoch * len(train_loader) + batch_idx + 1
             running_loss = 0.
     return last_loss
 
@@ -69,14 +70,13 @@ def train(model, train_loader, optimizer, epoch):
 if __name__ == '__main__':
 
     if pos:
-        prefix='../pos/'
+        prefix = '../pos/'
     else:
-        prefix='../ner/'
+        prefix = '../ner/'
 
-
-    vocab,train_data,dev,labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
-    model = MLP_Tagger(len(vocab), 150, len(labels),embed_size=50).to(device)
-    train_set=torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    vocab, train_data, dev, labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
+    model = MLP_Tagger(len(vocab), 150, len(labels), embed_size=50).to(device)
+    train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters())
     best_loss = 1e6
@@ -90,7 +90,7 @@ if __name__ == '__main__':
         running_vloss = 0.0
         with torch.no_grad():
             accurate = 0
-            to_reduce = 0 #should be 0 for POS
+            to_reduce = 0  #should be 0 for POS
             for i, vdata in enumerate(validation_loader):
                 vinputs, vlabels = vdata
                 vinputs = vinputs.to(device)
@@ -102,10 +102,11 @@ if __name__ == '__main__':
                     pred = torch.argmax(voutputs[k])
 
                     if pred == vlabels[k]:
-                        if not pos  and pred == labels['O']:
+                        if not pos and pred == labels['O']:
                             to_reduce += 1
                         accurate += 1
-            print(f'validation accuracy: {100 * ((accurate-to_reduce) / (len(validation_loader.dataset)-to_reduce))}')
+            print(
+                f'validation accuracy: {100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))}')
 
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
@@ -118,6 +119,6 @@ if __name__ == '__main__':
         outputs = model(inputs)
         for i in range(len(labels)):
             pred = torch.argmax(outputs[i])
-            if pred == labels[i] :
+            if pred == labels[i]:
                 accurate += 1
     print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')
