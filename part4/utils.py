@@ -109,14 +109,14 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffi
         word4_id, word4_prefix_id, word4_suffix_id = get_ids(word4, word_to_id, prefix_to_id, suffix_to_id)
         word5_id, word5_prefix_id, word5_suffix_id = get_ids(word5, word_to_id, prefix_to_id, suffix_to_id)
 
-        sample = torch.tensor([
+        x = torch.tensor([
             [word1_id, word2_id, word3_id, word4_id, word5_id],
             [word1_prefix_id, word2_prefix_id, word3_prefix_id, word4_prefix_id, word5_prefix_id],
             [word1_suffix_id, word2_suffix_id, word3_suffix_id, word4_suffix_id, word5_suffix_id],
         ])
-        label = label_to_id[label]
+        y = label_to_id[label]
 
-        dataset.append((sample, label))
+        dataset.append((x, y))
 
     return dataset
 
@@ -131,8 +131,6 @@ def get_train_dev(train_file_path, dev_file_path):
     train_dataset = get_dataset(word_label_train, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
     dev_dataset = get_dataset(word_label_dev, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
 
-    return train_dataset, dev_dataset
+    label_id_to_label = {v: k for k, v in label_to_id.items()}
 
-
-
-
+    return train_dataset, dev_dataset, len(word_to_id), len(prefix_to_id), len(suffix_to_id), len(label_to_id), label_id_to_label
