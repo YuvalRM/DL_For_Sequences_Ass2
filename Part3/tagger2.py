@@ -3,7 +3,6 @@ import torch
 from torch import nn
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
 
 #from utils import LABELS_pos, TRAIN_pos, DEV_pos, vocab_pos, LABELS_ner, TRAIN_ner, DEV_ner, vocab_ner
 
@@ -12,7 +11,7 @@ BATCH_SIZE = 32
 pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-from utils import create_dev_train
+from Part1.utils import create_dev_train
 
 
 def create_tensor_with_prob_zero(tensor_size, rand_value):
