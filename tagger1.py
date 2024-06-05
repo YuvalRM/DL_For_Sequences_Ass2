@@ -4,14 +4,14 @@ from torch import nn
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-from utils import LABELS_pos, TRAIN_pos, DEV_pos, vocab_pos, LABELS_ner, TRAIN_ner, DEV_ner, vocab_ner
+#from utils import LABELS_pos, TRAIN_pos, DEV_pos, vocab_pos, LABELS_ner, TRAIN_ner, DEV_ner, vocab_ner
 
 EPOCHS=10
 BATCH_SIZE = 32
 pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
+from utils import create_dev_train
 def create_tensor_with_prob_zero(tensor_size, rand_value):
     ones_tensor = torch.ones(tensor_size)
     zero_mask = torch.rand(tensor_size[0]) < rand_value
@@ -71,14 +71,18 @@ if __name__ == '__main__':
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
-    if pos:
-        model = MLP_Tagger(len(vocab_pos), 150, len(LABELS_pos), embed_size=50).to(device)
-        train_set = torch.utils.data.DataLoader(TRAIN_pos, batch_size=BATCH_SIZE, shuffle=True)
-        validation_loader = torch.utils.data.DataLoader(DEV_pos, batch_size=100, shuffle=True)
-    else:
-        model = MLP_Tagger(len(vocab_ner), 150, len(LABELS_ner), embed_size=50).to(device)
-        train_set = torch.utils.data.DataLoader(TRAIN_ner, batch_size=BATCH_SIZE, shuffle=True)
-        validation_loader = torch.utils.data.DataLoader(DEV_ner, batch_size=100, shuffle=True)
+    vocab,train_data,dev,labels = create_dev_train('./pos/train','./pos/dev')
+    model = MLP_Tagger(len(vocab), 150, len(labels),embed_size=50).to(device)
+    train_set=torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
+    #if pos:
+    #    model = MLP_Tagger(len(vocab_pos), 150, len(LABELS_pos), embed_size=50).to(device)
+    #    train_set = torch.utils.data.DataLoader(TRAIN_pos, batch_size=BATCH_SIZE, shuffle=True)
+    #    validation_loader = torch.utils.data.DataLoader(DEV_pos, batch_size=100, shuffle=True)
+    #else:
+    #    model = MLP_Tagger(len(vocab_ner), 150, len(LABELS_ner), embed_size=50).to(device)
+    #    train_set = torch.utils.data.DataLoader(TRAIN_ner, batch_size=BATCH_SIZE, shuffle=True)
+    #    validation_loader = torch.utils.data.DataLoader(DEV_ner, batch_size=100, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters())
     best_loss = 1e6
     for epoch in range(EPOCHS):
