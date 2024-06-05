@@ -38,7 +38,7 @@ class MLP_Tagger(nn.Module):
         return x
 
 
-def train(model, train_loader, optimizer, epoch, tb_writer):
+def train(model, train_loader, optimizer, epoch):
     rand_value = 0  # hyper parameter for vanishing randomly words s.t we will be able to handle words not int the vocab
     running_loss = 0.0
     last_loss = 0.0
@@ -62,7 +62,6 @@ def train(model, train_loader, optimizer, epoch, tb_writer):
             last_loss = running_loss / 1000  # loss per batch
             print('  batch {} loss: {}'.format(batch_idx + 1, last_loss))
             tb_x = epoch * len(train_loader) + batch_idx + 1
-            tb_writer.add_scalar('Loss/train', last_loss, tb_x)
             running_loss = 0.
     return last_loss
 
@@ -70,13 +69,11 @@ def train(model, train_loader, optimizer, epoch, tb_writer):
 if __name__ == '__main__':
 
     if pos:
-        prefix='./pos/'
+        prefix='../pos/'
     else:
-        prefix='./ner/'
+        prefix='../ner/'
 
 
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    writer = SummaryWriter('runs/fashion_trainer_{}'.format(timestamp))
     vocab,train_data,dev,labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
     model = MLP_Tagger(len(vocab), 150, len(labels),embed_size=50).to(device)
     train_set=torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
@@ -86,7 +83,7 @@ if __name__ == '__main__':
     for epoch in range(EPOCHS):
         print('Epoch {}/{}'.format(epoch + 1, EPOCHS))
         model.train()
-        avg_loss = train(model, train_set, optimizer, epoch, writer)
+        avg_loss = train(model, train_set, optimizer, epoch)
         model.eval()
 
         # Disable gradient computation and reduce memory consumption.
@@ -112,10 +109,7 @@ if __name__ == '__main__':
 
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
-        writer.add_scalars('Training vs. Validation Loss',
-                           {'Training': avg_loss, 'Validation': avg_vloss},
-                           epoch + 1)
-        writer.flush()
+
     accurate = 0
     for batch_idx, data in enumerate(train_set):
         inputs, labels = data
