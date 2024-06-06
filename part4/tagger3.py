@@ -1,7 +1,9 @@
+import copy
+
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from part4.utils import get_train_dev
+from part4.utils import get_train_dev, plot_values
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -37,9 +39,6 @@ class Tagger3(nn.Module):
 
 
 
-
-
-
 # Hyperparameters
 hidden_size = 128
 learning_rate = 0.001
@@ -55,7 +54,7 @@ def train(pos=True):
         dev_file_path = '../ner/dev'
 
     train_dataset, dev_dataset, num_words_embeddings, num_prefixes_embeddings, num_suffixes_embeddings, num_labels, label_id_to_label =\
-        get_train_dev('../ner/train', '../ner/dev')
+        get_train_dev(train_file_path, dev_file_path)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     dev_loader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
@@ -65,6 +64,10 @@ def train(pos=True):
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
+    dev_losses, dev_acc = [], []
+    best_dev_acc = -1
+    best_model = None
 
     # Training loop
     for epoch in range(num_epochs):
@@ -89,16 +92,64 @@ def train(pos=True):
         model.eval()
         correct = 0
         total = 0
+        loss_dev = 0.
         with torch.no_grad():
             for batch in dev_loader:
                 samples, labels = batch
+                samples, labels = samples.to(device), labels.to(device)
                 outputs = model(samples)
                 _, predicted = torch.max(outputs.data, 1)
+
                 total += labels.size(0)
+                loss_dev = criterion(outputs, labels).item()
                 correct += (predicted == labels).sum().item()
 
+        loss_dev = loss_dev / len(dev_loader)
         accuracy = 100 * correct / total
-        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}, Accuracy: {accuracy:.2f}%')
+        dev_losses.append(loss_dev)
+        dev_acc.append(accuracy)
+
+        if accuracy > best_dev_acc:
+            best_dev_acc = accuracy
+            best_model = copy.deepcopy(model)
+
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss_dev:.4f}, Accuracy: {accuracy:.2f}%')
+
+    plot_values(dev_losses, 'Dev Loss')
+    plot_values(dev_acc, 'Dev Accuracy')
+
+    return best_model, label_id_to_label
+
+def test(pos=True):
+    if pos:
+        test_file_path = '../pos/test'
+    else:
+        test_file_path = '../ner/test'
+
+    test_dataset, _, num_words_embeddings, num_prefixes_embeddings, num_suffixes_embeddings, num_labels, label_id_to_label =\
+        get_train_dev(test_file_path, test_file_path)
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+    model, label_id_to_label = train(pos)
+
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for batch in test_loader:
+            samples, labels = batch
+            samples, labels = samples.to(device), labels.to(device)
+            outputs = model(samples)
+            _, predicted = torch.max(outputs.data, 1)
+
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    accuracy = 100 * correct / total
+    print(f'Test Accuracy: {accuracy:.2f}%')
+
+    return label_id_to_label
 
 
-train(pos=False)
+best_model, label_id_to_label = train(pos=True)

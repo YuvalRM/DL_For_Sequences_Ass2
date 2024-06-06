@@ -1,4 +1,5 @@
 import torch
+import matplotlib.pyplot as plt
 
 UNKNOWN = '<unknown>'
 
@@ -134,3 +135,32 @@ def get_train_dev(train_file_path, dev_file_path):
     label_id_to_label = {v: k for k, v in label_to_id.items()}
 
     return train_dataset, dev_dataset, len(word_to_id), len(prefix_to_id), len(suffix_to_id), len(label_to_id), label_id_to_label
+
+
+def plot_values(values, y_label):
+    """
+    Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
+
+    Args:
+    values (list): A list of values to plot.
+    y_label (str): The label for the y-axis.
+    """
+    # Generate the x values (epochs)
+    epochs = list(range(1, len(values) + 1))
+
+    # Create the plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, values, marker='o', linestyle='-', color='b')
+
+    # Set the labels
+    plt.xlabel('Epochs')
+    plt.ylabel(y_label)
+
+    # Set the title
+    plt.title(f'{y_label} vs Epochs')
+
+    # Show the grid
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
