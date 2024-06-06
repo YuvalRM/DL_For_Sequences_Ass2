@@ -11,8 +11,7 @@ BATCH_SIZE = 32
 pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-from Part1.utils import create_dev_train
-
+from Part3.utils import create_dev_train, plot_values
 
 def create_tensor_with_prob_zero(tensor_size, rand_value):
     ones_tensor = torch.ones(tensor_size)
@@ -23,12 +22,12 @@ def create_tensor_with_prob_zero(tensor_size, rand_value):
 
 
 class MLP_Tagger(nn.Module):
-    def __init__(self, input_size, hidden_layer_size, output_size, embed_size=50):
+    def __init__(self, input_size, hidden_layer_size, output_size,embeddings, embed_size=50):
         super(MLP_Tagger, self).__init__()
         self.embedding = nn.Embedding(input_size, embed_size, padding_idx=0)
         self.fc1 = nn.Linear(embed_size * 5, hidden_layer_size)
         self.fc2 = nn.Linear(hidden_layer_size, output_size)
-
+        self.embedding.weight.data.copy_(torch.from_numpy(embeddings))
     def forward(self, x):
         x = self.embedding(x)
         x = x.view(-1, 250)
@@ -41,15 +40,12 @@ class MLP_Tagger(nn.Module):
 
 
 def train(model, train_loader, optimizer, epoch):
-    rand_value = 0  # hyper parameter for vanishing randomly words s.t we will be able to handle words not int the vocab
     running_loss = 0.0
     last_loss = 0.0
     for batch_idx, data in enumerate(train_loader):
 
         optimizer.zero_grad()
         inputs, labels = data
-        y = create_tensor_with_prob_zero(inputs.shape, rand_value)
-        inputs = inputs * y
         inputs = inputs.to(device)
         labels = labels.to(device)
         outputs = model(inputs)
@@ -62,7 +58,6 @@ def train(model, train_loader, optimizer, epoch):
         if batch_idx % 1000 == 999:
             last_loss = running_loss / 1000  # loss per batch
             print('  batch {} loss: {}'.format(batch_idx + 1, last_loss))
-            tb_x = epoch * len(train_loader) + batch_idx + 1
             running_loss = 0.
     return last_loss
 
@@ -77,8 +72,8 @@ if __name__ == '__main__':
     voc_vecs = zip(vocabulary, vecs)
     word_dic = {word: vec for word, vec in voc_vecs}
 
-    word_to_idx = {word: i  for i, word in enumerate(list(sorted(set(vocabulary))))}
-    idx_to_word = {i: word for i, word in enumerate(list(sorted(set(vocabulary))))}
+    word_to_idx = {word: i  for i, word in enumerate(vocabulary)}
+    idx_to_word = {i: word for i, word in enumerate(vocabulary)}
 
 
     if pos:
@@ -87,13 +82,16 @@ if __name__ == '__main__':
         prefix = '../ner/'
 
 
-    vocab, train_data, dev, labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
-    model = MLP_Tagger(len(vocab), 150, len(labels), embed_size=50).to(device)
+    train_data, dev, labels_to_i,i_to_labels = create_dev_train(f'{prefix}train', f'{prefix}dev',word_to_idx)
+    model = MLP_Tagger(len(word_to_idx), 150, len(labels_to_i),embeddings= vecs,embed_size=50).to(device)
     train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
-    optimizer = torch.optim.Adam(model.parameters())
+    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
     best_loss = 1e6
-    model.embedding.weight.data.copy_(torch.from_numpy(vecs))
+
+
+    dev_losses=[]
+    dev_accuracies =[]
     for epoch in range(EPOCHS):
         print('Epoch {}/{}'.format(epoch + 1, EPOCHS))
         model.train()
@@ -116,22 +114,29 @@ if __name__ == '__main__':
                     pred = torch.argmax(voutputs[k])
 
                     if pred == vlabels[k]:
-                        if not pos and pred == labels['O']:
+                        if not pos and pred == labels_to_i['O']:
                             to_reduce += 1
                         accurate += 1
+                accuracy=100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))
             print(
-                f'validation accuracy: {100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))}')
+                f'validation accuracy: {accuracy}')
 
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+        dev_losses.append(avg_vloss)
+        dev_accuracies.append(accuracy)
+    settings= 'POS' if pos else 'NER'
+    plot_values(dev_losses,f'Dev Losses {settings}')
+    plot_values(dev_accuracies, f'Dev Accuracies {settings}')
+
     accurate = 0
     for batch_idx, data in enumerate(train_set):
-        inputs, labels = data
+        inputs, labels_to_i = data
         inputs = inputs.to(device)
-        labels = labels.to(device)
+        labels_to_i = labels_to_i.to(device)
         outputs = model(inputs)
-        for i in range(len(labels)):
+        for i in range(len(labels_to_i)):
             pred = torch.argmax(outputs[i])
-            if pred == labels[i]:
+            if pred == labels_to_i[i]:
                 accurate += 1
     print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')

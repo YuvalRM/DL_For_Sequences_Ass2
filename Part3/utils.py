@@ -1,78 +1,132 @@
 import numpy as np
 import torch
-
-
-def relevant(symbol):
-    return True
-    return symbol not in ['""', '``', "''", '#', '$', '(', ')', ',', ':', '.', ';']
+from matplotlib import pyplot as plt
 
 
 def load_labes(file_name):
     f = open(file_name, 'r')
     lines = f.readlines()
     labes = {}
+    indexes = {}
     i = 0
     for line in lines:
         line = line.strip()
         x_y = line.split()
 
-        if len(x_y) == 2 and relevant(x_y[1]) and x_y[1] not in labes.keys():
+        if len(x_y) == 2 and x_y[1] not in labes.keys():
             labes[x_y[1]] = i
+            indexes[i] = x_y[1]
             i += 1
     f.close()
-    return labes
+    return labes,indexes
 
 
-def load_data(file_name):
+def load_data(file_name, strat_token='<s>', end_token='</s>'):
     f = open(file_name, 'r')
     lines = f.readlines()
     data = []
+    data.append((strat_token, 'POS'))
+    data.append((strat_token,  'POS'))
     for line in lines:
         line = line.strip()
         x_y = line.split()
 
-        if len(x_y) == 2 and relevant(x_y[1]):
+        if len(x_y) == 2:
             data.append((x_y[0], x_y[1]))
     f.close()
+    data.append((end_token,  'POS'))
+    data.append((end_token,  'POS'))
     return data
 
 
 def convert_data_to_fives(data):
     new_data = []
-    for i in range(len(data)):
-        num1, num2, num3, num4, num5 = -1, -1, -1, -1, -1
-        if i == 0:
-            num2 = 1
-        if i <= 1:
-            num1 = 1
-        if i >= len(data) - 2:
-            num5 = 2
-        if i == len(data) - 1:
-            num4 = 2
-        if num1 == -1:
-            num1 = data[i - 2][0]
-        if num2 == -1:
-            num2 = data[i - 1][0]
-        if num4 == -1:
-            num4 = data[i + 1][0]
-        if num5 == -1:
-            num5 = data[2 + i][0]
-
+    for i in range(2, len(data) - 2):
+        num1 = data[i - 2][0]
+        num2 = data[i - 1][0]
+        num4 = data[i + 1][0]
+        num5 = data[2 + i][0]
         num3 = data[i][0]
         new_data.append((torch.tensor([num1, num2, num3, num4, num5]), data[i][1]))
     return new_data
 
 
-def create_dev_train(train_file, dev_file):
-    LABELS = load_labes(train_file)
-    Word_to_lable_id = [(w, LABELS[ner]) for w, ner in load_data(train_file)]
-    word_to_id = {l: i + 3 for i, l in enumerate(list(sorted(set([l for l, t in Word_to_lable_id]))))}
-    word_to_id['<start>'] = 1  # for the edges and words not in the dataset
-    word_to_id['<end>'] = 2
-    word_to_id['<unknown>'] = 0
-    DEV = [(word_to_id[w], LABELS[label_id]) if w in word_to_id.keys() else (word_to_id['<unknown>'], LABELS[label_id])
-           for w, label_id in load_data(dev_file)]
-    TRAIN = [(word_to_id[w], label) for w, label in Word_to_lable_id]
-    TRAIN = convert_data_to_fives(TRAIN)
-    DEV = convert_data_to_fives(DEV)
-    return word_to_id, TRAIN, DEV, LABELS
+def number_representation(w, w_to_i):
+    if all(ch.isdigit() or ch == '.' or ch == '+' or ch == '-' for ch in w):
+        pattern = ""
+
+        # Replace each character with 'DG'
+        for ch in w:
+            pattern += 'DG' if ch.isdigit() else ch
+
+        pattern = pattern if pattern in w_to_i else 'NNNUMMM'
+        return pattern
+
+    elif all(ch.isdigit() or ch == ',' for ch in w) and any(ch.isdigit() for ch in w):
+        return "NNNUMMM"
+
+    return None
+
+
+def convert_to_data(data_to_label, w_to_i, l_2_i, unknown_token='UUUNKKK'):
+    data = []
+    for w, l in data_to_label:
+        if w in w_to_i.keys():
+            index = w_to_i[w]
+        else:
+            if w.lower() in w_to_i.keys():
+                index = w_to_i[w.lower()]
+            else:
+                if number_representation(w, w_to_i) in w_to_i.keys():
+                    index = w_to_i[number_representation(w, w_to_i)]
+                else:
+                    index = w_to_i[unknown_token]
+        label_id = l_2_i[l]
+        data.append((index, label_id))
+
+    return data
+
+
+def create_dev_train(train_file, dev_file, w_to_i):
+    l_2_i, i_2_l = load_labes(train_file)
+
+    train_2_label = load_data(train_file)
+    dev_2_label = load_data(dev_file)
+
+    train_data = convert_to_data(train_2_label, w_to_i, l_2_i)
+    dev_data = convert_to_data(dev_2_label, w_to_i, l_2_i)
+    train_data = convert_data_to_fives(train_data)
+    dev_data = convert_data_to_fives(dev_data)
+
+    return train_data, dev_data, l_2_i, i_2_l
+
+
+
+def plot_values(values, y_label):
+    """
+    Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
+
+    Args:
+    values (list): A list of values to plot.
+    y_label (str): The label for the y-axis.
+    """
+    # Generate the x values (epochs)
+    epochs = list(range(1, len(values) + 1))
+
+    # Create the plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, values, marker='o', linestyle='-', color='b')
+
+    # Set the labels
+    plt.xlabel('Epochs')
+    plt.ylabel(y_label)
+
+    # Set the title
+    plt.title(f'{y_label} vs Epochs')
+
+    # Show the grid
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+    plt.savefig(fname=y_label)

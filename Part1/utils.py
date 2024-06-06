@@ -1,10 +1,6 @@
 import numpy as np
 import torch
-
-
-def relevant(symbol):
-    return True
-    return symbol not in ['""', '``', "''", '#', '$', '(', ')', ',', ':', '.', ';']
+from matplotlib import pyplot as plt
 
 
 def load_labes(file_name):
@@ -16,7 +12,7 @@ def load_labes(file_name):
         line = line.strip()
         x_y = line.split()
 
-        if len(x_y) == 2 and relevant(x_y[1]) and x_y[1] not in labes.keys():
+        if len(x_y) == 2 and x_y[1] not in labes.keys():
             labes[x_y[1]] = i
             i += 1
     f.close()
@@ -31,7 +27,7 @@ def load_data(file_name):
         line = line.strip()
         x_y = line.split()
 
-        if len(x_y) == 2 and relevant(x_y[1]):
+        if len(x_y) == 2 :
             data.append((x_y[0], x_y[1]))
     f.close()
     return data
@@ -76,3 +72,33 @@ def create_dev_train(train_file, dev_file):
     TRAIN = convert_data_to_fives(TRAIN)
     DEV = convert_data_to_fives(DEV)
     return word_to_id, TRAIN, DEV, LABELS
+
+
+
+def plot_values(values, y_label):
+    """
+    Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
+
+    Args:
+    values (list): A list of values to plot.
+    y_label (str): The label for the y-axis.
+    """
+    # Generate the x values (epochs)
+    epochs = list(range(1, len(values) + 1))
+
+    # Create the plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, values, marker='o', linestyle='-', color='b')
+
+    # Set the labels
+    plt.xlabel('Epochs')
+    plt.ylabel(y_label)
+
+    # Set the title
+    plt.title(f'{y_label} vs Epochs')
+
+    # Show the grid
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()

@@ -1,26 +1,15 @@
 # This is a sample Python script.
 import torch
 from torch import nn
-import numpy as np
-from torch.utils.tensorboard import SummaryWriter
-from datetime import datetime
 
-#from utils import LABELS_pos, TRAIN_pos, DEV_pos, vocab_pos, LABELS_ner, TRAIN_ner, DEV_ner, vocab_ner
 
 EPOCHS = 10
 BATCH_SIZE = 32
 pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-from utils import create_dev_train
+from Part1.utils import create_dev_train, plot_values
 
-
-def create_tensor_with_prob_zero(tensor_size, rand_value):
-    ones_tensor = torch.ones(tensor_size)
-    zero_mask = torch.rand(tensor_size[0]) < rand_value
-    ones_tensor[:, 2] = (1 - zero_mask.type(torch.float))
-    ones_tensor = ones_tensor.int()
-    return ones_tensor
 
 
 class MLP_Tagger(nn.Module):
@@ -42,15 +31,12 @@ class MLP_Tagger(nn.Module):
 
 
 def train(model, train_loader, optimizer, epoch):
-    rand_value = 0  # hyper parameter for vanishing randomly words s.t we will be able to handle words not int the vocab
     running_loss = 0.0
     last_loss = 0.0
     for batch_idx, data in enumerate(train_loader):
 
         optimizer.zero_grad()
         inputs, labels = data
-        y = create_tensor_with_prob_zero(inputs.shape, rand_value)
-        inputs = inputs * y
         inputs = inputs.to(device)
         labels = labels.to(device)
         outputs = model(inputs)
@@ -70,16 +56,20 @@ def train(model, train_loader, optimizer, epoch):
 if __name__ == '__main__':
 
     if pos:
-        prefix = '../pos/'
+        prefix = './pos/'
     else:
-        prefix = '../ner/'
+        prefix = './ner/'
 
     vocab, train_data, dev, labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
-    model = MLP_Tagger(len(vocab), 150, len(labels), embed_size=50).to(device)
+    model = MLP_Tagger(len(vocab), 128, len(labels), embed_size=50).to(device)
     train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters())
     best_loss = 1e6
+
+    dev_losses=[]
+    dev_accuracies =[]
+
     for epoch in range(EPOCHS):
         print('Epoch {}/{}'.format(epoch + 1, EPOCHS))
         model.train()
@@ -105,11 +95,18 @@ if __name__ == '__main__':
                         if not pos and pred == labels['O']:
                             to_reduce += 1
                         accurate += 1
-            print(
-                f'validation accuracy: {100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))}')
+        accuracy = 100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))
+        print(
+            f'validation accuracy: {accuracy}')
 
         avg_vloss = running_vloss / (i + 1)
+        dev_losses.append(avg_vloss)
+        dev_accuracies.append(accuracy)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+
+    settings= 'POS' if pos else 'NER'
+    plot_values(dev_losses,f'Dev Losses {settings}')
+    plot_values(dev_accuracies, f'Dev Accuracies {settings}')
 
     accurate = 0
     for batch_idx, data in enumerate(train_set):
