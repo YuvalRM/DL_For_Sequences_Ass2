@@ -1,7 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 
-UNKNOWN = '<unknown>'
+UNKNOWN = 'uuunkkk'
 
 def load_labes(file_name):
     f = open(file_name, 'r')
@@ -15,17 +15,28 @@ def load_labes(file_name):
             labes[x_y[1]] = i
             i += 1
     f.close()
+    labes[UNKNOWN] = i
     return labes
 
-def load_data(file_name):
+def load_data(file_name, is_label=True):
     f = open(file_name, 'r')
     lines = f.readlines()
     data = []
-    for line in lines:
-        line = line.strip()
-        x_y = line.split()
-        if len(x_y) == 2:
-            data.append((x_y[0], x_y[1]))
+
+    # TEST
+    if not is_label:
+        for line in lines:
+            x = line.strip()
+            if len(x) >= 1:
+                data.append((x.lower(), UNKNOWN))
+
+    # DEV or TRAIN
+    else:
+        for line in lines:
+            line = line.strip()
+            x_y = line.split()
+            if len(x_y) == 2:
+                data.append((x_y[0].lower(), x_y[1]))
     f.close()
     return data
 
@@ -85,7 +96,6 @@ def get_ids(word, word_to_id, prefix_to_id, suffix_to_id):
 
     return word_id, prefix_id, suffix_id
 
-
 def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffix_to_id):
     dataset = []
 
@@ -121,23 +131,49 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffi
 
     return dataset
 
-def get_train_dev(train_file_path, dev_file_path):
+
+
+
+def get_train_dev(train_file_path, dev_file_path, test_file_path):
     label_to_id = load_labes(train_file_path)
     word_label_train = load_data(train_file_path)
     word_label_dev = load_data(dev_file_path)
+    word_label_test = load_data(test_file_path, is_label=False)
 
-    word_to_id = get_unique_x_ids(word_label_train)
+    vocab = load_data("../vocab.txt", is_label=False)
+
+    word_to_id = get_unique_x_ids(vocab)
     prefix_to_id, suffix_to_id = generate_suffix_prefix_dicts(word_to_id)
 
     train_dataset = get_dataset(word_label_train, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
     dev_dataset = get_dataset(word_label_dev, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
+    test_dataset = get_dataset(word_label_test, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
 
     label_id_to_label = {v: k for k, v in label_to_id.items()}
 
-    return train_dataset, dev_dataset, len(word_to_id), len(prefix_to_id), len(suffix_to_id), len(label_to_id), label_id_to_label
+    return (train_dataset,
+            dev_dataset,
+            test_dataset,
+            len(word_to_id),
+            len(prefix_to_id),
+            len(suffix_to_id),
+            label_to_id,
+            label_id_to_label,
+            word_label_test)
 
 
-def plot_values(values, y_label):
+def write_tuples_to_file(file_path, x_y):
+    """
+    Writes an array of tuples to a file, each tuple on a new line with elements separated by a space.
+
+    :param file_path: The path to the file where the tuples will be written.
+    :param x_y: An array of tuples to be written to the file.
+    """
+    with open(file_path, 'w') as file:
+        for item in x_y:
+            file.write(f"{item[0]} {item[1]}\n")
+
+def plot_values(path, values, y_label):
     """
     Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
 
@@ -162,5 +198,5 @@ def plot_values(values, y_label):
     # Show the grid
     plt.grid(True)
 
-    # Show the plot
-    plt.show()
+    # Save the plot
+    plt.savefig(path)
