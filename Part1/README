@@ -1,0 +1,17 @@
+To run the code right click on tagger1.py and press run,
+in line 6 of the code there is a boolean variable called pos that dictates whether we are running pos or ner (true for pos, false for ner)
+the needed files should be in this hierarchy:
+├── ner
+│   ├── dev
+│   ├── test
+│   └── train
+├── pos
+│   ├── dev
+│   ├── test
+│   └── train
+└── Part1
+    ├── utils_part1.py
+    └── tagger1.py
+The code will output new files test1.ner and test1.pos (rewrite if ones already exist)
+and 2 images Dev Losses {ner/pos}_part1 and Dev Accuracies {ner/pos}_part1
+showing loss and accuracy over epochs.
