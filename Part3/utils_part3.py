@@ -21,12 +21,12 @@ def load_labes(file_name):
     return labes, indexes
 
 
-def load_data(file_name, strat_token='<s>', end_token='</s>'):
+def load_data(file_name, strat_token='<s>', end_token='</s>',default_label='POS'):
     f = open(file_name, 'r')
     lines = f.readlines()
     data = []
-    data.append((strat_token, 'POS'))
-    data.append((strat_token, 'POS'))
+    data.append((strat_token, default_label))
+    data.append((strat_token, default_label))
     for line in lines:
         line = line.strip()
         x_y = line.split()
@@ -34,8 +34,8 @@ def load_data(file_name, strat_token='<s>', end_token='</s>'):
         if len(x_y) == 2:
             data.append((x_y[0], x_y[1]))
     f.close()
-    data.append((end_token, 'POS'))
-    data.append((end_token, 'POS'))
+    data.append((end_token,default_label))
+    data.append((end_token, default_label))
     return data
 
 
@@ -138,8 +138,8 @@ def convert_test_to_fives(data):
 def create_dev_train(train_file, dev_file, test_file, w_to_i):
     l_2_i, i_2_l = load_labes(train_file)
 
-    train_2_label = load_data(train_file)
-    dev_2_label = load_data(dev_file)
+    train_2_label = load_data(train_file,default_label=i_2_l[0])
+    dev_2_label = load_data(dev_file,default_label=i_2_l[0])
 
     train_data = convert_to_data(train_2_label, w_to_i, l_2_i)
     dev_data = convert_to_data(dev_2_label, w_to_i, l_2_i)

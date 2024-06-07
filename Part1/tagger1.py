@@ -1,15 +1,15 @@
 # This is a sample Python script.
 import copy
-
 import torch
 from torch import nn
-
+from utils_part1 import create_dev_train, plot_values
+pos = False
 EPOCHS = 10
 BATCH_SIZE = 32
-pos = True
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-from Part1.utils import create_dev_train, plot_values
+
 
 
 class MLP_Tagger(nn.Module):
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters())
     best_loss = 1e6
-    i_to_labels ={labels[l]:l for l in labels.keys()}
+    i_to_labels = {labels[l]: l for l in labels.keys()}
     dev_losses = []
     dev_accuracies = []
 
