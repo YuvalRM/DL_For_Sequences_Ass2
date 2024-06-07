@@ -18,7 +18,7 @@ def load_labes(file_name):
             indexes[i] = x_y[1]
             i += 1
     f.close()
-    return labes,indexes
+    return labes, indexes
 
 
 def load_data(file_name, strat_token='<s>', end_token='</s>'):
@@ -26,7 +26,7 @@ def load_data(file_name, strat_token='<s>', end_token='</s>'):
     lines = f.readlines()
     data = []
     data.append((strat_token, 'POS'))
-    data.append((strat_token,  'POS'))
+    data.append((strat_token, 'POS'))
     for line in lines:
         line = line.strip()
         x_y = line.split()
@@ -34,8 +34,8 @@ def load_data(file_name, strat_token='<s>', end_token='</s>'):
         if len(x_y) == 2:
             data.append((x_y[0], x_y[1]))
     f.close()
-    data.append((end_token,  'POS'))
-    data.append((end_token,  'POS'))
+    data.append((end_token, 'POS'))
+    data.append((end_token, 'POS'))
     return data
 
 
@@ -87,7 +87,55 @@ def convert_to_data(data_to_label, w_to_i, l_2_i, unknown_token='UUUNKKK'):
     return data
 
 
-def create_dev_train(train_file, dev_file, w_to_i):
+def load_train(file_name, strat_token='<s>', end_token='</s>'):
+    f = open(file_name, 'r')
+    lines = f.readlines()
+    data = []
+    data.append(strat_token)
+    data.append(strat_token)
+    for line in lines:
+        line = line.strip()
+        x_y = line.split()
+
+        if len(x_y) >= 1 and (x_y[0]) != '\n':
+            data.append(x_y[0])
+    f.close()
+    data.append(end_token)
+    data.append(end_token)
+    return data
+
+
+def convert_to_test(train_data, w_to_i, unknown_token='UUUNKKK'):
+    data = []
+    for w in train_data:
+        if w in w_to_i.keys():
+            index = w_to_i[w]
+        else:
+            if w.lower() in w_to_i.keys():
+                index = w_to_i[w.lower()]
+            else:
+                if number_representation(w, w_to_i) in w_to_i.keys():
+                    index = w_to_i[number_representation(w, w_to_i)]
+                else:
+                    index = w_to_i[unknown_token]
+        data.append(index, )
+
+    return data
+
+
+def convert_test_to_fives(data):
+    new_data = []
+    for i in range(2, len(data) - 2):
+        num1 = data[i - 2]
+        num2 = data[i - 1]
+        num4 = data[i + 1]
+        num5 = data[2 + i]
+        num3 = data[i]
+        new_data.append(torch.tensor([num1, num2, num3, num4, num5]))
+    return new_data
+
+
+def create_dev_train(train_file, dev_file, test_file, w_to_i):
     l_2_i, i_2_l = load_labes(train_file)
 
     train_2_label = load_data(train_file)
@@ -98,8 +146,9 @@ def create_dev_train(train_file, dev_file, w_to_i):
     train_data = convert_data_to_fives(train_data)
     dev_data = convert_data_to_fives(dev_data)
 
-    return train_data, dev_data, l_2_i, i_2_l
-
+    test_words = load_train(test_file)
+    test_data = convert_test_to_fives(convert_to_test(load_train(test_file), w_to_i))
+    return train_data, dev_data, test_data, l_2_i, i_2_l, test_words
 
 
 def plot_values(values, y_label):
@@ -127,6 +176,7 @@ def plot_values(values, y_label):
     # Show the grid
     plt.grid(True)
 
+    plt.savefig(fname=f"./{y_label}_part_3")
+
     # Show the plot
     plt.show()
-    plt.savefig(fname=y_label)

@@ -1,4 +1,6 @@
 # This is a sample Python script.
+import copy
+
 import torch
 from torch import nn
 import numpy as np
@@ -13,6 +15,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 from Part3.utils import create_dev_train, plot_values
 
+
 def create_tensor_with_prob_zero(tensor_size, rand_value):
     ones_tensor = torch.ones(tensor_size)
     zero_mask = torch.rand(tensor_size[0]) < rand_value
@@ -22,12 +25,13 @@ def create_tensor_with_prob_zero(tensor_size, rand_value):
 
 
 class MLP_Tagger(nn.Module):
-    def __init__(self, input_size, hidden_layer_size, output_size,embeddings, embed_size=50):
+    def __init__(self, input_size, hidden_layer_size, output_size, embeddings, embed_size=50):
         super(MLP_Tagger, self).__init__()
         self.embedding = nn.Embedding(input_size, embed_size, padding_idx=0)
         self.fc1 = nn.Linear(embed_size * 5, hidden_layer_size)
         self.fc2 = nn.Linear(hidden_layer_size, output_size)
         self.embedding.weight.data.copy_(torch.from_numpy(embeddings))
+
     def forward(self, x):
         x = self.embedding(x)
         x = x.view(-1, 250)
@@ -72,26 +76,27 @@ if __name__ == '__main__':
     voc_vecs = zip(vocabulary, vecs)
     word_dic = {word: vec for word, vec in voc_vecs}
 
-    word_to_idx = {word: i  for i, word in enumerate(vocabulary)}
+    word_to_idx = {word: i for i, word in enumerate(vocabulary)}
     idx_to_word = {i: word for i, word in enumerate(vocabulary)}
-
 
     if pos:
         prefix = '../pos/'
     else:
         prefix = '../ner/'
 
-
-    train_data, dev, labels_to_i,i_to_labels = create_dev_train(f'{prefix}train', f'{prefix}dev',word_to_idx)
-    model = MLP_Tagger(len(word_to_idx), 150, len(labels_to_i),embeddings= vecs,embed_size=50).to(device)
+    train_data, dev, test_data, labels_to_i, i_to_labels, test_words = create_dev_train(f'{prefix}train',
+                                                                                        f'{prefix}dev', f'{prefix}test',
+                                                                                        word_to_idx)
+    model = MLP_Tagger(len(word_to_idx), 150, len(labels_to_i), embeddings=vecs, embed_size=50).to(device)
     train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
-    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     best_loss = 1e6
 
-
-    dev_losses=[]
-    dev_accuracies =[]
+    best_model = None
+    best_acc = 0
+    dev_losses = []
+    dev_accuracies = []
     for epoch in range(EPOCHS):
         print('Epoch {}/{}'.format(epoch + 1, EPOCHS))
         model.train()
@@ -117,26 +122,39 @@ if __name__ == '__main__':
                         if not pos and pred == labels_to_i['O']:
                             to_reduce += 1
                         accurate += 1
-                accuracy=100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))
+                accuracy = 100 * ((accurate - to_reduce) / (len(validation_loader.dataset) - to_reduce))
             print(
                 f'validation accuracy: {accuracy}')
-
         avg_vloss = running_vloss / (i + 1)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
         dev_losses.append(avg_vloss)
         dev_accuracies.append(accuracy)
-    settings= 'POS' if pos else 'NER'
-    plot_values(dev_losses,f'Dev Losses {settings}')
+        if accuracy > best_acc:
+            best_acc = accuracy
+            best_model = copy.deepcopy(model)
+    settings = 'pos' if pos else 'ner'
+    plot_values(dev_losses, f'Dev Losses {settings}')
     plot_values(dev_accuracies, f'Dev Accuracies {settings}')
 
-    accurate = 0
-    for batch_idx, data in enumerate(train_set):
-        inputs, labels_to_i = data
-        inputs = inputs.to(device)
-        labels_to_i = labels_to_i.to(device)
-        outputs = model(inputs)
-        for i in range(len(labels_to_i)):
-            pred = torch.argmax(outputs[i])
-            if pred == labels_to_i[i]:
-                accurate += 1
-    print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')
+    #accurate = 0
+    #for batch_idx, data in enumerate(train_set):
+    #    inputs, labels_to_i = data
+    #    inputs = inputs.to(device)
+    #    labels_to_i = labels_to_i.to(device)
+    #    outputs = model(inputs)
+    #    for i in range(len(labels_to_i)):
+    #        pred = torch.argmax(outputs[i])
+    #        if pred == labels_to_i[i]:
+    #            accurate += 1
+    #print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')
+
+    test_words = test_words[2:-2]
+    f = open(f'test3.{settings}', 'w')
+
+    for x, w in zip(test_data, test_words):
+        x=x.to(device)
+        pred = torch.argmax(best_model(x))
+        label = i_to_labels[pred.item()]
+        f.write(f'{w} {label}\n')
+
+    f.close()

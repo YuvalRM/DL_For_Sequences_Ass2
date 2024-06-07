@@ -1,7 +1,8 @@
 # This is a sample Python script.
+import copy
+
 import torch
 from torch import nn
-
 
 EPOCHS = 10
 BATCH_SIZE = 32
@@ -9,7 +10,6 @@ pos = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 from Part1.utils import create_dev_train, plot_values
-
 
 
 class MLP_Tagger(nn.Module):
@@ -56,19 +56,23 @@ def train(model, train_loader, optimizer, epoch):
 if __name__ == '__main__':
 
     if pos:
-        prefix = './pos/'
+        prefix = '../pos/'
     else:
-        prefix = './ner/'
+        prefix = '../ner/'
 
-    vocab, train_data, dev, labels = create_dev_train(f'{prefix}train', f'{prefix}dev')
+    vocab, train_data, dev, labels, test_data, test_words = create_dev_train(f'{prefix}train', f'{prefix}dev',
+                                                                             f'{prefix}test')
     model = MLP_Tagger(len(vocab), 128, len(labels), embed_size=50).to(device)
     train_set = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     validation_loader = torch.utils.data.DataLoader(dev, batch_size=100, shuffle=True)
     optimizer = torch.optim.Adam(model.parameters())
     best_loss = 1e6
+    i_to_labels ={labels[l]:l for l in labels.keys()}
+    dev_losses = []
+    dev_accuracies = []
 
-    dev_losses=[]
-    dev_accuracies =[]
+    best_acc = 0
+    best_model = None
 
     for epoch in range(EPOCHS):
         print('Epoch {}/{}'.format(epoch + 1, EPOCHS))
@@ -103,19 +107,33 @@ if __name__ == '__main__':
         dev_losses.append(avg_vloss)
         dev_accuracies.append(accuracy)
         print('LOSS train {} valid {}'.format(avg_loss, avg_vloss))
+        if accuracy > best_acc:
+            best_acc = accuracy
+            best_model = copy.deepcopy(model)
 
-    settings= 'POS' if pos else 'NER'
-    plot_values(dev_losses,f'Dev Losses {settings}')
+    settings = 'pos' if pos else 'ner'
+    plot_values(dev_losses, f'Dev Losses {settings}')
     plot_values(dev_accuracies, f'Dev Accuracies {settings}')
 
-    accurate = 0
-    for batch_idx, data in enumerate(train_set):
-        inputs, labels = data
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-        outputs = model(inputs)
-        for i in range(len(labels)):
-            pred = torch.argmax(outputs[i])
-            if pred == labels[i]:
-                accurate += 1
-    print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')
+    #accurate = 0
+    #for batch_idx, data in enumerate(train_set):
+    #    inputs, labels = data
+    #    inputs = inputs.to(device)
+    #    labels = labels.to(device)
+    #    outputs = model(inputs)
+    #    for i in range(len(labels)):
+    #        pred = torch.argmax(outputs[i])
+    #        if pred == labels[i]:
+    #            accurate += 1
+    #print(f'final train accuracy: {100 * accurate / len(train_set.dataset)}')
+
+    test_words = test_words[2:-2]
+    f = open(f'test1.{settings}', 'w')
+
+    for x, w in zip(test_data, test_words):
+        x = x.to(device)
+        pred = torch.argmax(best_model(x))
+        label = i_to_labels[pred.item()]
+        f.write(f'{w} {label}\n')
+
+    f.close()
