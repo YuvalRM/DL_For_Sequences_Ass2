@@ -6,7 +6,9 @@ def sim(u, v):
     vv = np.dot(v, v)
     uu = np.dot(u, u)
     return uv / (np.sqrt(vv) * np.sqrt(uu))
-
+def print_words(words,dists):
+    for w,d in zip(words,dists):
+        print(f'{w}\t{d}')
 
 def most_similar(word, k):
     vecs = np.loadtxt("../wordVectors.txt")
@@ -28,15 +30,16 @@ def most_similar(word, k):
             closest[0][location] = w
             closest[1][location] = dist
 
+    print(word)
+    print_words(closest[0], closest[1])
+    return closest[0],closest[1]
 
-
-    print(word_dic[word])
-    return closest[0]
 
 
 if __name__ == '__main__':
-    print(most_similar('dog', 5))
-    print(most_similar('england', 5))
-    print(most_similar('john', 5))
-    print(most_similar('explode', 5))
-    print(most_similar('office', 5))
+    most_similar('dog', 5)
+    most_similar('england', 5)
+    most_similar('john', 5)
+    most_similar('explode', 5)
+    most_similar('office', 5)
+
