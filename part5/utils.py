@@ -1,7 +1,11 @@
+import os
+
 import torch
 import matplotlib.pyplot as plt
+from torch.nn.utils.rnn import pad_sequence
 
 UNKNOWN = 'uuunkkk'
+PADDING = 'ppadddd'
 
 def load_labes(file_name):
     f = open(file_name, 'r')
@@ -39,6 +43,21 @@ def load_data(file_name, is_label=True):
                 data.append((x_y[0].lower(), x_y[1]))
     f.close()
     return data
+
+
+def create_char_to_id(vocabulary):
+    # Initialize the character_to_id dictionary
+    character_to_id = {UNKNOWN: 1, PADDING: 0}
+
+    # Assign a unique ID to each character in the vocabulary
+    current_id = 2
+    for vocab_word in vocabulary:
+        for char in vocab_word:
+            if char not in character_to_id:
+                character_to_id[char] = current_id
+                current_id += 1
+
+    return character_to_id
 
 
 def get_unique_x_ids(tuples_list):
@@ -96,7 +115,14 @@ def get_ids(word, word_to_id, prefix_to_id, suffix_to_id):
 
     return word_id, prefix_id, suffix_id
 
-def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffix_to_id):
+def get_chars_ids(word, char_to_id, word_id, word_id_to_chars_ids):
+    char_ids = []
+    for char in word:
+        char_ids.append(get_id(char, char_to_id))
+    word_id_to_chars_ids[word_id] = torch.tensor(char_ids)
+    return torch.tensor(char_ids)
+
+def get_dataset(word_label_dataset, word_to_id, label_to_id, char_to_id, word_id_to_chars_ids):
     dataset = []
 
     # these for the edges
@@ -114,17 +140,19 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffi
         word4 = word_label_dataset[i + 1][0]
         word5 = word_label_dataset[i + 2][0]
 
-        word1_id, word1_prefix_id, word1_suffix_id = get_ids(word1, word_to_id, prefix_to_id, suffix_to_id)
-        word2_id, word2_prefix_id, word2_suffix_id = get_ids(word2, word_to_id, prefix_to_id, suffix_to_id)
-        word3_id, word3_prefix_id, word3_suffix_id = get_ids(word3, word_to_id, prefix_to_id, suffix_to_id)
-        word4_id, word4_prefix_id, word4_suffix_id = get_ids(word4, word_to_id, prefix_to_id, suffix_to_id)
-        word5_id, word5_prefix_id, word5_suffix_id = get_ids(word5, word_to_id, prefix_to_id, suffix_to_id)
+        word1_id = get_id(word1, word_to_id)
+        word2_id = get_id(word2, word_to_id)
+        word3_id = get_id(word3, word_to_id)
+        word4_id = get_id(word4, word_to_id)
+        word5_id = get_id(word5, word_to_id)
 
-        x = torch.tensor([
-            [word1_id, word2_id, word3_id, word4_id, word5_id],
-            [word1_prefix_id, word2_prefix_id, word3_prefix_id, word4_prefix_id, word5_prefix_id],
-            [word1_suffix_id, word2_suffix_id, word3_suffix_id, word4_suffix_id, word5_suffix_id],
-        ])
+        word1_char_ids = get_chars_ids(word1, char_to_id, word1_id, word_id_to_chars_ids)
+        word2_char_ids = get_chars_ids(word2, char_to_id, word2_id, word_id_to_chars_ids)
+        word3_char_ids = get_chars_ids(word3, char_to_id, word3_id, word_id_to_chars_ids)
+        word4_char_ids = get_chars_ids(word4, char_to_id, word4_id, word_id_to_chars_ids)
+        word5_char_ids = get_chars_ids(word5, char_to_id, word5_id, word_id_to_chars_ids)
+
+        x = torch.tensor([word1_id, word2_id, word3_id, word4_id, word5_id])
         y = label_to_id[label]
 
         dataset.append((x, y))
@@ -132,41 +160,10 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffi
     return dataset
 
 
-
-
-def get_train_dev(train_file_path, dev_file_path, test_file_path):
-    label_to_id = load_labes(train_file_path)
-    word_label_train = load_data(train_file_path)
-    word_label_dev = load_data(dev_file_path)
-    word_label_test = load_data(test_file_path, is_label=False)
-
-    vocab = load_data("../vocab.txt", is_label=False)
-
-    word_to_id = get_unique_x_ids(vocab)
-    prefix_to_id, suffix_to_id = generate_suffix_prefix_dicts(word_to_id)
-
-    train_dataset = get_dataset(word_label_train, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
-    dev_dataset = get_dataset(word_label_dev, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
-    test_dataset = get_dataset(word_label_test, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
-
-    label_id_to_label = {v: k for k, v in label_to_id.items()}
-
-    return (train_dataset,
-            dev_dataset,
-            test_dataset,
-            len(word_to_id),
-            len(prefix_to_id),
-            len(suffix_to_id),
-            label_to_id,
-            label_id_to_label,
-            word_label_test)
-
-
 def process_file(file_path, word_list, new_file_path):
     # Read the content of the original file
     with open(file_path, 'r') as file:
         lines = file.readlines()
-    lines = [s for s in lines if s.strip() != '']
 
     # Make sure we have enough items in the list to process the lines
     if len(word_list) < len(lines):
@@ -182,6 +179,34 @@ def process_file(file_path, word_list, new_file_path):
             new_file.write(new_line)
 
     print(f"Processed file saved as: {new_file_path}")
+def get_train_dev(train_file_path, dev_file_path, test_file_path):
+    label_to_id = load_labes(train_file_path)
+    word_label_train = load_data(train_file_path)
+    word_label_dev = load_data(dev_file_path)
+    word_label_test = load_data(test_file_path, is_label=False)
+
+    vocab = load_data("../vocab.txt", is_label=False)
+    char_to_id = create_char_to_id(vocab)
+
+    word_to_id = get_unique_x_ids(vocab)
+    word_id_to_chars_ids = {}
+
+    train_dataset = get_dataset(word_label_train, word_to_id, label_to_id, char_to_id, word_id_to_chars_ids)
+    dev_dataset = get_dataset(word_label_dev, word_to_id, label_to_id, char_to_id, word_id_to_chars_ids)
+    test_dataset = get_dataset(word_label_test, word_to_id, label_to_id, char_to_id, word_id_to_chars_ids)
+
+    label_id_to_label = {v: k for k, v in label_to_id.items()}
+
+    return (train_dataset,
+            dev_dataset,
+            test_dataset,
+            len(word_to_id),
+            len(char_to_id),
+            label_to_id,
+            label_id_to_label,
+            word_label_test,
+            word_id_to_chars_ids)
+
 
 def plot_values(path, values, y_label):
     """

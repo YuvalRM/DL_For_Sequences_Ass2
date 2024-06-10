@@ -3,36 +3,52 @@ import numpy as np
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from part4.utils import get_train_dev, plot_values, process_file
+from part5.utils import get_train_dev, plot_values, process_file
+from torch.nn.utils.rnn import pad_sequence
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-class Tagger3(nn.Module):
+class Tagger4(nn.Module):
     def __init__(self,
                  num_words_embeddings,
-                 num_prefixes_embeddings,
-                 num_suffixes_embeddings,
+                 num_chars_embeddings,
                  hidden_layer_size,
                  output_size,
+                 word_id_to_chars_ids,
                  embed_size=50,
                  pre_trained_embeddings=False):
 
-        super(Tagger3, self).__init__()
+        super(Tagger4, self).__init__()
+        self.word_id_to_chars_ids = word_id_to_chars_ids
         self.word_embedding = nn.Embedding(num_words_embeddings, embed_size, padding_idx=0)
-        self.prefix_embedding = nn.Embedding(num_prefixes_embeddings, embed_size, padding_idx=0)
-        self.suffix_embedding = nn.Embedding(num_suffixes_embeddings, embed_size, padding_idx=0)
+        self.chars_embedding = nn.Embedding(num_chars_embeddings, embed_size, padding_idx=0)
+        self.cnn1 = nn.Conv1d(embed_size, embed_size, kernel_size=3, padding=1)
         self.fc1 = nn.Linear(embed_size * 5, hidden_layer_size)
         self.fc2 = nn.Linear(hidden_layer_size, output_size)
         if pre_trained_embeddings:
             self.word_embedding.weight.data.copy_(torch.from_numpy(np.loadtxt("../wordVectors.txt")))
 
+    def embed_chars(self, tensor):
+        keys = tensor.tolist()  # Convert tensor to list
+        chars_emebeddings = pad_sequence([self.chars_embedding(self.word_id_to_chars_ids[key]) for key in keys], batch_first=True)
+        return chars_emebeddings.transpose(1, 2)
+
     def forward(self, x):
-        words = self.word_embedding(x[:, 0, :])
-        prefixes = self.prefix_embedding(x[:, 1, :])
-        suffixes = self.suffix_embedding(x[:, 2, :])
-        x = words + prefixes + suffixes
-        x = x.view(-1, 250)
+        chars0 = self.cnn1(self.embed_chars(x[:, 0]))
+        chars1 = self.cnn1(self.embed_chars(x[:, 1]))
+        chars2 = self.cnn1(self.embed_chars(x[:, 2]))
+        chars3 = self.cnn1(self.embed_chars(x[:, 3]))
+        chars4 = self.cnn1(self.embed_chars(x[:, 4]))
+        chars = torch.cat((chars0, chars1, chars2, chars3, chars4), dim=2)
+
+        stride = kernel_size = chars.shape[2] // 5
+        max_pool = nn.MaxPool1d(stride=stride, kernel_size=kernel_size)
+        chars = max_pool(chars)
+
+        words = self.word_embedding(x).transpose(1, 2)
+        x = words + chars
+        x = x.transpose(1,2).view(-1, 250)
         x = self.fc1(x)
         x = nn.functional.tanh(x)
         x = self.fc2(x)
@@ -59,7 +75,7 @@ def train(pos=True, pre_trained_embeddings=True):
     fig_loss = f'fig_loss_{mode}_{pre_trained}.png'
 
 
-    train_dataset, dev_dataset, test_dataset, num_words_embeddings, num_prefixes_embeddings, num_suffixes_embeddings, label_to_id, label_id_to_label, test_words =\
+    train_dataset, dev_dataset, test_dataset, num_words_embeddings, num_chars_embeddings, label_to_id, label_id_to_label, test_words, word_id_to_chars_ids =\
         get_train_dev(train_file_path, dev_file_path, test_file_path)
     num_labels = len(label_to_id) - 1
 
@@ -67,7 +83,7 @@ def train(pos=True, pre_trained_embeddings=True):
     dev_loader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize the model, loss function, and optimizer
-    model = Tagger3(num_words_embeddings, num_prefixes_embeddings, num_suffixes_embeddings, hidden_size, num_labels, pre_trained_embeddings=pre_trained_embeddings)
+    model = Tagger4(num_words_embeddings, num_chars_embeddings, hidden_size, num_labels, word_id_to_chars_ids, pre_trained_embeddings=pre_trained_embeddings)
     model = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -163,8 +179,9 @@ process_file('../ner/test','test4.ner', predictions)
 # POS
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=True)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../pos/test', 'test4.pos', predictions)
+process_file('../pos/test','test4.pos', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../pos/test', 'test4.pos', predictions)
+process_file('../pos/test','test4.pos', predictions)
+
