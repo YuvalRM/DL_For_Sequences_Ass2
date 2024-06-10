@@ -160,10 +160,11 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, char_to_id, word_id
     return dataset
 
 
-def process_file(file_path, word_list, new_file_path):
+def process_file(file_path, new_file_path, word_list):
     # Read the content of the original file
     with open(file_path, 'r') as file:
         lines = file.readlines()
+    lines = [s for s in lines if s.strip() != '']
 
     # Make sure we have enough items in the list to process the lines
     if len(word_list) < len(lines):

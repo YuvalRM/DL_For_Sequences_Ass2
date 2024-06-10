@@ -162,7 +162,7 @@ def get_train_dev(train_file_path, dev_file_path, test_file_path):
             word_label_test)
 
 
-def process_file(file_path, word_list, new_file_path):
+def process_file(file_path, new_file_path, word_list):
     # Read the content of the original file
     with open(file_path, 'r') as file:
         lines = file.readlines()
