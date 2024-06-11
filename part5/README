@@ -1,0 +1,24 @@
+To run the the code plesae run
+
+```pip install torch torchvision matplotlib numpy
+python tagger4.py```
+
+in line 6 of the code there is a boolean variable called pos that dictates whether we are running pos or ner (true for pos, false for ner)
+the needed files should be in this hierarchy:
+
+├── wordVectors.txt
+├── vocab.txt
+├── ner
+│   ├── dev
+│   ├── test
+│   └── train
+├── pos
+│   ├── dev
+│   ├── test
+│   └── train
+└── Part5
+    ├── utils.py
+    └── tagger4.py
+The code will output new files test5.ner and test5.pos (rewrite if ones already exist)
+and 2 images Dev Losses {ner/pos} and Dev Accuracies {ner/pos} and pre trained word vectors {ner/pos}
+showing loss and accuracy over epochs.

@@ -1,6 +1,7 @@
 import torch
+import matplotlib.pyplot as plt
 
-UNKNOWN = '<unknown>'
+UNKNOWN = 'uuunkkk'
 
 def load_labes(file_name):
     f = open(file_name, 'r')
@@ -14,17 +15,28 @@ def load_labes(file_name):
             labes[x_y[1]] = i
             i += 1
     f.close()
+    labes[UNKNOWN] = i
     return labes
 
-def load_data(file_name):
+def load_data(file_name, is_label=True):
     f = open(file_name, 'r')
     lines = f.readlines()
     data = []
-    for line in lines:
-        line = line.strip()
-        x_y = line.split()
-        if len(x_y) == 2:
-            data.append((x_y[0], x_y[1]))
+
+    # TEST
+    if not is_label:
+        for line in lines:
+            x = line.strip()
+            if len(x) >= 1:
+                data.append((x.lower(), UNKNOWN))
+
+    # DEV or TRAIN
+    else:
+        for line in lines:
+            line = line.strip()
+            x_y = line.split()
+            if len(x_y) == 2:
+                data.append((x_y[0].lower(), x_y[1]))
     f.close()
     return data
 
@@ -84,7 +96,6 @@ def get_ids(word, word_to_id, prefix_to_id, suffix_to_id):
 
     return word_id, prefix_id, suffix_id
 
-
 def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffix_to_id):
     dataset = []
 
@@ -109,30 +120,93 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, prefix_to_id, suffi
         word4_id, word4_prefix_id, word4_suffix_id = get_ids(word4, word_to_id, prefix_to_id, suffix_to_id)
         word5_id, word5_prefix_id, word5_suffix_id = get_ids(word5, word_to_id, prefix_to_id, suffix_to_id)
 
-        sample = torch.tensor([
+        x = torch.tensor([
             [word1_id, word2_id, word3_id, word4_id, word5_id],
             [word1_prefix_id, word2_prefix_id, word3_prefix_id, word4_prefix_id, word5_prefix_id],
             [word1_suffix_id, word2_suffix_id, word3_suffix_id, word4_suffix_id, word5_suffix_id],
         ])
-        label = label_to_id[label]
+        y = label_to_id[label]
 
-        dataset.append((sample, label))
+        dataset.append((x, y))
 
     return dataset
 
-def get_train_dev(train_file_path, dev_file_path):
+
+
+
+def get_train_dev(train_file_path, dev_file_path, test_file_path):
     label_to_id = load_labes(train_file_path)
     word_label_train = load_data(train_file_path)
     word_label_dev = load_data(dev_file_path)
+    word_label_test = load_data(test_file_path, is_label=False)
 
-    word_to_id = get_unique_x_ids(word_label_train)
+    vocab = load_data("../vocab.txt", is_label=False)
+
+    word_to_id = get_unique_x_ids(vocab)
     prefix_to_id, suffix_to_id = generate_suffix_prefix_dicts(word_to_id)
 
     train_dataset = get_dataset(word_label_train, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
     dev_dataset = get_dataset(word_label_dev, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
+    test_dataset = get_dataset(word_label_test, word_to_id, label_to_id, prefix_to_id, suffix_to_id)
 
-    return train_dataset, dev_dataset
+    label_id_to_label = {v: k for k, v in label_to_id.items()}
+
+    return (train_dataset,
+            dev_dataset,
+            test_dataset,
+            len(word_to_id),
+            len(prefix_to_id),
+            len(suffix_to_id),
+            label_to_id,
+            label_id_to_label,
+            word_label_test)
 
 
+def process_file(file_path, new_file_path, word_list):
+    # Read the content of the original file
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+    lines = [s for s in lines if s.strip() != '']
 
+    # Make sure we have enough items in the list to process the lines
+    if len(word_list) < len(lines):
+        raise ValueError("The list is shorter than the number of lines in the file.")
 
+    # Process each line and append the corresponding list item
+    with open(new_file_path, 'w') as new_file:
+        for line, word in zip(lines, word_list):
+            line = line.strip()
+            if len(line) == 0:
+                continue
+            new_line = f"{line.strip()} {word[1]}\n"
+            new_file.write(new_line)
+
+    print(f"Processed file saved as: {new_file_path}")
+
+def plot_values(path, values, y_label):
+    """
+    Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
+
+    Args:
+    values (list): A list of values to plot.
+    y_label (str): The label for the y-axis.
+    """
+    # Generate the x values (epochs)
+    epochs = list(range(1, len(values) + 1))
+
+    # Create the plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs, values, marker='o', linestyle='-', color='b')
+
+    # Set the labels
+    plt.xlabel('Epochs')
+    plt.ylabel(y_label)
+
+    # Set the title
+    plt.title(f'{y_label} vs Epochs')
+
+    # Show the grid
+    plt.grid(True)
+
+    # Save the plot
+    plt.savefig(path)
