@@ -3,7 +3,7 @@ To run the the code plesae run
 ```pip install torch torchvision matplotlib numpy
 python tagger3.py```
 
-in line 6 of the code there is a boolean variable called pos that dictates whether we are running pos or ner (true for pos, false for ner)
+the code runs the model with/without the pre trained word vectore on NER and POS datasets.
 the needed files should be in this hierarchy:
 ├── wordVectors.txt
 ├── vocab.txt
