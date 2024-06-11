@@ -46,7 +46,7 @@ class Tagger3(nn.Module):
 hidden_size = 128
 learning_rate = 0.001
 batch_size = 16
-num_epochs = 1
+num_epochs = 10
 
 def train(pos=True, pre_trained_embeddings=True):
     mode = 'pos' if pos else 'ner'
@@ -158,7 +158,7 @@ process_file('../ner/test','test4.ner', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=False, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../ner/test','test4.ner', predictions)
+#process_file('../ner/test','test4.ner', predictions)
 
 # POS
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=True)
@@ -167,4 +167,4 @@ process_file('../pos/test', 'test4.pos', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../pos/test', 'test4.pos', predictions)
+#process_file('../pos/test', 'test4.pos', predictions)

@@ -7,6 +7,11 @@ from torch.nn.utils.rnn import pad_sequence
 UNKNOWN = 'uuunkkk'
 PADDING = 'ppadddd'
 
+MAX_WORD_SIZE = -1
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
 def load_labes(file_name):
     f = open(file_name, 'r')
     lines = f.readlines()
@@ -34,13 +39,16 @@ def load_data(file_name, is_label=True):
             if len(x) >= 1:
                 data.append((x.lower(), UNKNOWN))
 
+
     # DEV or TRAIN
     else:
         for line in lines:
             line = line.strip()
             x_y = line.split()
             if len(x_y) == 2:
-                data.append((x_y[0].lower(), x_y[1]))
+                x = x_y[0].lower()
+                data.append((x, x_y[1]))
+
     f.close()
     return data
 
@@ -51,8 +59,8 @@ def create_char_to_id(vocabulary):
 
     # Assign a unique ID to each character in the vocabulary
     current_id = 2
-    for vocab_word in vocabulary:
-        for char in vocab_word:
+    for word, label in vocabulary:
+        for char in word:
             if char not in character_to_id:
                 character_to_id[char] = current_id
                 current_id += 1
@@ -119,7 +127,6 @@ def get_chars_ids(word, char_to_id, word_id, word_id_to_chars_ids):
     char_ids = []
     for char in word:
         char_ids.append(get_id(char, char_to_id))
-    word_id_to_chars_ids[word_id] = torch.tensor(char_ids)
     return torch.tensor(char_ids)
 
 def get_dataset(word_label_dataset, word_to_id, label_to_id, char_to_id, word_id_to_chars_ids):
@@ -152,10 +159,11 @@ def get_dataset(word_label_dataset, word_to_id, label_to_id, char_to_id, word_id
         word4_char_ids = get_chars_ids(word4, char_to_id, word4_id, word_id_to_chars_ids)
         word5_char_ids = get_chars_ids(word5, char_to_id, word5_id, word_id_to_chars_ids)
 
-        x = torch.tensor([word1_id, word2_id, word3_id, word4_id, word5_id])
+        words = [word1_id, word2_id, word3_id, word4_id, word5_id]
+        char_ids = [word1_char_ids, word2_char_ids, word3_char_ids, word4_char_ids, word5_char_ids]
         y = label_to_id[label]
 
-        dataset.append((x, y))
+        dataset.append(((words, char_ids), y))
 
     return dataset
 
@@ -209,6 +217,14 @@ def get_train_dev(train_file_path, dev_file_path, test_file_path):
             word_id_to_chars_ids)
 
 
+def collate_fn(batch):
+    inputs, labels = zip(*batch)
+    words, subword_inputs = zip(*inputs)
+    words = torch.tensor(words).to(device)
+    labels = torch.tensor(labels).to(device)
+    subword_inputs = pad_and_combine(subword_inputs).to(device)
+    return (words, subword_inputs), labels
+
 def plot_values(path, values, y_label):
     """
     Plots the given values with 'Epochs' as the x-axis label and y_label as the y-axis label.
@@ -236,3 +252,42 @@ def plot_values(path, values, y_label):
 
     # Save the plot
     plt.savefig(path)
+
+
+def pad_and_combine(tensors):
+    """
+    Pads each tensor equally on the right and left to match the size of the largest tensor
+    in the lists and returns a single tensor of shape
+    (num_of_lists, num_tensors_in_a_list, max_tensor_size).
+
+    Args:
+    tensors (tuple of lists of tensors): A tuple containing lists of tensors where each tensor can
+                                         have different sizes.
+
+    Returns:
+    torch.Tensor: A combined tensor of shape (num_of_lists, num_tensors_in_a_list, max_tensor_size).
+    """
+    # Determine the maximum size of any tensor in any list
+    max_size = max(tensor.size(0) for tensor_list in tensors for tensor in tensor_list)
+
+    # Pad and collect tensors
+    padded_tensors = []
+    for tensor_list in tensors:
+        padded_list = []
+        for tensor in tensor_list:
+            # Calculate padding amounts
+            total_padding = max_size - tensor.size(0)
+            pad_left = total_padding // 2
+            pad_right = total_padding - pad_left
+
+            # Apply padding
+            padded_tensor = torch.nn.functional.pad(tensor, (pad_left, pad_right), mode='constant', value=0)
+            padded_list.append(padded_tensor)
+
+        # Stack tensors in the current list along a new dimension
+        padded_tensors.append(torch.stack(padded_list))
+
+    # Stack all lists of tensors along another new dimension
+    combined_tensor = torch.stack(padded_tensors)
+
+    return combined_tensor

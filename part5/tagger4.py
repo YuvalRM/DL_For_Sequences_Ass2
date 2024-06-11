@@ -2,8 +2,9 @@ import copy
 import numpy as np
 import torch
 from torch import nn, optim
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from part5.utils import get_train_dev, plot_values, process_file
+from part5.utils import get_train_dev, plot_values, process_file, collate_fn
 from torch.nn.utils.rnn import pad_sequence
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -16,44 +17,69 @@ class Tagger4(nn.Module):
                  hidden_layer_size,
                  output_size,
                  word_id_to_chars_ids,
-                 embed_size=50,
-                 pre_trained_embeddings=False):
+                 word_embed_size=50,
+                 pre_trained_embeddings=False,
+                 kernel_size=3,
+                 stride=1,
+                 num_filters=20,
+                 char_embed_size=15):
 
         super(Tagger4, self).__init__()
         self.word_id_to_chars_ids = word_id_to_chars_ids
-        self.word_embedding = nn.Embedding(num_words_embeddings, embed_size, padding_idx=0)
-        self.chars_embedding = nn.Embedding(num_chars_embeddings, embed_size, padding_idx=0)
-        self.cnn1 = nn.Conv1d(embed_size, embed_size, kernel_size=3, padding=1)
-        self.fc1 = nn.Linear(embed_size * 5, hidden_layer_size)
+        self.word_embedding = nn.Embedding(num_words_embeddings, word_embed_size, padding_idx=0)
+        self.char_embedding = nn.Embedding(num_chars_embeddings, char_embed_size, padding_idx=0)
+        # Character-level convolutional layer
+        self.char_conv = nn.Conv1d(char_embed_size, num_filters, kernel_size=kernel_size, padding=1)
+
+        # Fully connected layer for final classification or regression
+        self.fc1 = nn.Linear(5 * (word_embed_size + num_filters), hidden_layer_size)
+
         self.fc2 = nn.Linear(hidden_layer_size, output_size)
         if pre_trained_embeddings:
             self.word_embedding.weight.data.copy_(torch.from_numpy(np.loadtxt("../wordVectors.txt")))
 
     def embed_chars(self, tensor):
         keys = tensor.tolist()  # Convert tensor to list
-        chars_emebeddings = pad_sequence([self.chars_embedding(self.word_id_to_chars_ids[key]) for key in keys], batch_first=True)
+        chars_emebeddings = pad_sequence([self.char_embedding(self.word_id_to_chars_ids[key].to(device)) for key in keys], batch_first=True)
         return chars_emebeddings.transpose(1, 2)
 
     def forward(self, x):
-        chars0 = self.cnn1(self.embed_chars(x[:, 0]))
-        chars1 = self.cnn1(self.embed_chars(x[:, 1]))
-        chars2 = self.cnn1(self.embed_chars(x[:, 2]))
-        chars3 = self.cnn1(self.embed_chars(x[:, 3]))
-        chars4 = self.cnn1(self.embed_chars(x[:, 4]))
-        chars = torch.cat((chars0, chars1, chars2, chars3, chars4), dim=2)
+        # words: (batch_size, seq_len)
+        # chars: (batch_size, max_word_len, seq_len)
+        words, chars = x
 
-        stride = kernel_size = chars.shape[2] // 5
-        max_pool = nn.MaxPool1d(stride=stride, kernel_size=kernel_size)
-        chars = max_pool(chars)
+        # Embed the words
+        word_embeds = self.word_embedding(words)  # (batch_size, seq_len, word_embed_dim)
 
-        words = self.word_embedding(x).transpose(1, 2)
-        x = words + chars
-        x = x.transpose(1,2).view(-1, 250)
-        x = self.fc1(x)
-        x = nn.functional.tanh(x)
-        x = self.fc2(x)
-        x = nn.functional.softmax(x, dim=1)
-        return x
+        # Embed the characters
+        batch_size, seq_len, max_word_len = chars.size()
+        chars = chars.view(batch_size * seq_len, max_word_len)
+        char_embeds = self.char_embedding(chars)  # (batch_size * seq_len, max_word_len, char_embed_dim)
+
+        # Conv layer expects input in (batch_size, embed_dim, max_word_len)
+        char_embeds = char_embeds.permute(0, 2, 1)  # (batch_size * seq_len, char_embed_dim, max_word_len)
+        char_conv_out = F.tanh(self.char_conv(char_embeds))  # (batch_size * seq_len, char_conv_out, max_word_len)
+
+        # Max pooling over the character dimension
+        char_pool_out = F.max_pool1d(char_conv_out, kernel_size=char_conv_out.size(2)).squeeze(
+            2)  # (batch_size * seq_len, char_conv_out)
+
+        # Reshape back to (batch_size, seq_len, char_conv_out)
+        char_pool_out = char_pool_out.view(batch_size, seq_len, -1)  # (batch_size, seq_len, char_conv_out)
+
+        # Concatenate word and character-level features
+        combined_features = torch.cat((word_embeds, char_pool_out),
+                                      dim=2)  # (batch_size, seq_len, word_embed_dim + char_conv_out)
+
+        # Apply the first fully connected layer
+        combined_features = combined_features.view(batch_size, -1)  # (batch_size, seq_len * (word_embed_dim + char_conv_out))
+        combined_features = F.tanh(self.fc1(combined_features))  # (batch_size, 128)
+
+        combined_features = nn.functional.tanh(combined_features)
+        #combined_features = nn.functional.dropout(combined_features, training=self.training, p=0.2)
+        combined_features = self.fc2(combined_features)
+        combined_features = nn.functional.softmax(combined_features, dim=1)
+        return combined_features
 
 
 
@@ -62,7 +88,7 @@ class Tagger4(nn.Module):
 hidden_size = 128
 learning_rate = 0.001
 batch_size = 16
-num_epochs = 1
+num_epochs = 10
 
 def train(pos=True, pre_trained_embeddings=True):
     mode = 'pos' if pos else 'ner'
@@ -79,8 +105,8 @@ def train(pos=True, pre_trained_embeddings=True):
         get_train_dev(train_file_path, dev_file_path, test_file_path)
     num_labels = len(label_to_id) - 1
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    dev_loader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    dev_loader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
 
     # Initialize the model, loss function, and optimizer
     model = Tagger4(num_words_embeddings, num_chars_embeddings, hidden_size, num_labels, word_id_to_chars_ids, pre_trained_embeddings=pre_trained_embeddings)
@@ -99,7 +125,6 @@ def train(pos=True, pre_trained_embeddings=True):
         batch_idx, running_loss = 0, 0.
         for batch in train_loader:
             samples, labels = batch
-            samples, labels = samples.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(samples)
             loss = criterion(outputs, labels)
@@ -121,7 +146,6 @@ def train(pos=True, pre_trained_embeddings=True):
         with torch.no_grad():
             for batch in dev_loader:
                 samples, labels = batch
-                samples, labels = samples.to(device), labels.to(device)
                 outputs = model(samples)
                 _, predicted = torch.max(outputs.data, 1)
                 loss_dev += criterion(outputs, labels).item()
@@ -152,14 +176,13 @@ def train(pos=True, pre_trained_embeddings=True):
 
 
 def test(test_dataset, model, label_id_to_label, test_words):
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
     model.eval()
     predictions = []
     i = 2
     with torch.no_grad():
         for batch in test_loader:
             samples, _ = batch
-            samples = samples.to(device)
             outputs = model(samples)
             _, predicted = torch.max(outputs.data, 1)
             predictions.append((test_words[i][0], label_id_to_label[predicted.item()]))
@@ -174,7 +197,7 @@ process_file('../ner/test','test4.ner', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=False, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../ner/test','test4.ner', predictions)
+#process_file('../ner/test','test4.ner', predictions)
 
 # POS
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=True)
@@ -183,5 +206,5 @@ process_file('../pos/test','test4.pos', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../pos/test','test4.pos', predictions)
+#process_file('../pos/test','test4.pos', predictions)
 
