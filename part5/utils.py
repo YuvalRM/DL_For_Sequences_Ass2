@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 UNKNOWN = 'uuunkkk'
 PADDING = 'ppadddd'
 
-MAX_WORD_SIZE = 70
+MAX_WORD_SIZE = 20
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
