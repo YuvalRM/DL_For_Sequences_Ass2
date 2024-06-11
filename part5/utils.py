@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 UNKNOWN = 'uuunkkk'
 PADDING = 'ppadddd'
 
-MAX_WORD_SIZE = -1
+MAX_WORD_SIZE = 70
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -267,8 +267,9 @@ def pad_and_combine(tensors):
     Returns:
     torch.Tensor: A combined tensor of shape (num_of_lists, num_tensors_in_a_list, max_tensor_size).
     """
+    global MAX_WORD_SIZE
     # Determine the maximum size of any tensor in any list
-    max_size = max(tensor.size(0) for tensor_list in tensors for tensor in tensor_list)
+    max_size = MAX_WORD_SIZE    #max(tensor.size(0) for tensor_list in tensors for tensor in tensor_list)
 
     # Pad and collect tensors
     padded_tensors = []
@@ -276,6 +277,9 @@ def pad_and_combine(tensors):
         padded_list = []
         for tensor in tensor_list:
             # Calculate padding amounts
+            if tensor.size(0) >= MAX_WORD_SIZE:
+                padded_list.append(tensor[:MAX_WORD_SIZE])
+                continue
             total_padding = max_size - tensor.size(0)
             pad_left = total_padding // 2
             pad_right = total_padding - pad_left

@@ -21,16 +21,17 @@ class Tagger4(nn.Module):
                  pre_trained_embeddings=False,
                  kernel_size=3,
                  stride=1,
-                 num_filters=20,
+                 num_filters=5,
                  char_embed_size=15):
 
         super(Tagger4, self).__init__()
+        self.num_filter = num_filters
         self.word_id_to_chars_ids = word_id_to_chars_ids
         self.word_embedding = nn.Embedding(num_words_embeddings, word_embed_size, padding_idx=0)
         self.char_embedding = nn.Embedding(num_chars_embeddings, char_embed_size, padding_idx=0)
         # Character-level convolutional layer
-        self.char_conv = nn.Conv1d(char_embed_size, num_filters, kernel_size=kernel_size, padding=1)
-
+        #self.char_conv = nn.Conv1d(char_embed_size, self.num_filter, kernel_size=kernel_size, padding=1)
+        self.char_conv = nn.Conv2d(in_channels=1, out_channels=self.num_filter, kernel_size=(3, char_embed_size), padding=(2, 0))
         # Fully connected layer for final classification or regression
         self.fc1 = nn.Linear(5 * (word_embed_size + num_filters), hidden_layer_size)
 
@@ -57,19 +58,14 @@ class Tagger4(nn.Module):
         char_embeds = self.char_embedding(chars)  # (batch_size * seq_len, max_word_len, char_embed_dim)
 
         # Conv layer expects input in (batch_size, embed_dim, max_word_len)
-        char_embeds = char_embeds.permute(0, 2, 1)  # (batch_size * seq_len, char_embed_dim, max_word_len)
-        char_conv_out = F.tanh(self.char_conv(char_embeds))  # (batch_size * seq_len, char_conv_out, max_word_len)
+        char_embeds = char_embeds.unsqueeze(-1).permute(0, 3, 1, 2)  # (batch_size * seq_len, char_embed_dim, max_word_len)
+        char_conv_out = self.char_conv(char_embeds)  # (batch_size * seq_len, char_conv_out, max_word_len)
+        chars_embeds = nn.functional.max_pool2d(char_conv_out,
+                                                kernel_size=(char_conv_out.size(2), 1))
+        chars_embeds = chars_embeds.view(batch_size, seq_len, self.num_filter)
 
-        # Max pooling over the character dimension
-        char_pool_out = F.max_pool1d(char_conv_out, kernel_size=char_conv_out.size(2)).squeeze(
-            2)  # (batch_size * seq_len, char_conv_out)
 
-        # Reshape back to (batch_size, seq_len, char_conv_out)
-        char_pool_out = char_pool_out.view(batch_size, seq_len, -1)  # (batch_size, seq_len, char_conv_out)
-
-        # Concatenate word and character-level features
-        combined_features = torch.cat((word_embeds, char_pool_out),
-                                      dim=2)  # (batch_size, seq_len, word_embed_dim + char_conv_out)
+        combined_features = torch.cat((word_embeds, chars_embeds),dim=2)  # (batch_size, seq_len, word_embed_dim + num_filters)
 
         # Apply the first fully connected layer
         combined_features = combined_features.view(batch_size, -1)  # (batch_size, seq_len * (word_embed_dim + char_conv_out))
@@ -193,7 +189,7 @@ def test(test_dataset, model, label_id_to_label, test_words):
 # NER
 best_model, label_id_to_label, test_dataset, test_words = train(pos=False, pre_trained_embeddings=True)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../ner/test','test4.ner', predictions)
+process_file('../ner/test','test5.ner', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=False, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
@@ -202,7 +198,7 @@ predictions = test(test_dataset, best_model, label_id_to_label, test_words)
 # POS
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=True)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
-process_file('../pos/test','test4.pos', predictions)
+process_file('../pos/test','test5.pos', predictions)
 
 best_model, label_id_to_label, test_dataset, test_words = train(pos=True, pre_trained_embeddings=False)
 predictions = test(test_dataset, best_model, label_id_to_label, test_words)
